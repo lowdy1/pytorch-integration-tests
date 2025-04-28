@@ -38,7 +38,7 @@ defaults:
 
 jobs:
   setup_environment:
-    name: Setup NPU Environment
+    name: Run Torchtitan Environment
     runs-on: ${{ inputs.runner }}
     container:
       image: ${{ inputs.image }}
@@ -76,8 +76,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: pytorch/torchtitan
-          path: benchmark
-
+          path: torchtitan
 
       - name: Download torch artifact
         if: ${{ inputs.torch-artifact }}
@@ -120,6 +119,7 @@ jobs:
       - name: Install project dependencies
         run: |
           pip install -r requirements.txt
+          pip install pytest pytest-cov
 
       - name: Show environment info
         run: |
@@ -129,17 +129,12 @@ jobs:
           echo "NPU count: ${npu_count}"
           pip list | grep -E 'torch|numpy'
 
-      - name: Download Llama 3.1 tokenizer
-        run: |
-          python scripts/download_tokenizer.py --repo_id meta-llama/Meta-Llama-3.1-8B --tokenizer_path "original" --hf_token=${{ secrets.HF_TOKEN }}
-
-      - name: Run torchtitan integration_test_2
-        working-directory: torchtitan
+      - name: Run torchtitan integration_test
         run: |
           mkdir artifacts-to-be-uploaded
-          python ./tests/integration_tests.py artifacts-to-be-uploaded --ngpu 2
+          npu_count=$(python -c "import torch; print(torch.npu.device_count())")
+          python ./tests/integration_tests.py artifacts-to-be-uploaded --ngpu ${npu_count}
 
       - name: Run torchtitan unittest
-        working-directory: torchtitan
         run: |
           pytest ./tests/unit_tests --cov=. --cov-report=xml --durations=20 -vv
